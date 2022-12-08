@@ -9,7 +9,9 @@ from alab_management.scripts.cleanup_lab import cleanup_lab
 from alab_management.scripts.setup_lab import setup_lab
 
 
-def occupy_sample_positions(sample_positions, sample_view: SampleView, task_id: ObjectId):
+def occupy_sample_positions(
+    sample_positions, sample_view: SampleView, task_id: ObjectId
+):
     for sample_positions_ in sample_positions.values():
         for sample_position_ in sample_positions_:
             sample_view.lock_sample_position(task_id, sample_position_["name"])
@@ -34,31 +36,35 @@ class TestSampleView(TestCase):
         self.sample_view._sample_collection.drop()
 
     @contextmanager
-    def request_sample_positions(self, sample_positions_list, task_id: ObjectId, _timeout=None):
+    def request_sample_positions(
+        self, sample_positions_list, task_id: ObjectId, _timeout=None
+    ):
         cnt = 0
         sample_positions = self.sample_view.request_sample_positions(
-            task_id=task_id,
-            sample_positions=sample_positions_list
+            task_id=task_id, sample_positions=sample_positions_list
         )
-        while _timeout is not None and sample_positions is None and _timeout >= cnt / 10:
+        while (
+            _timeout is not None and sample_positions is None and _timeout >= cnt / 10
+        ):
             sample_positions = self.sample_view.request_sample_positions(
-                task_id=task_id,
-                sample_positions=sample_positions_list
+                task_id=task_id, sample_positions=sample_positions_list
             )
             cnt += 1
             time.sleep(0.1)
 
         if sample_positions is not None:
             occupy_sample_positions(sample_positions, self.sample_view, task_id)
-        yield {prefix: [sp["name"] for sp in sps] for prefix, sps in sample_positions.items()} \
-            if sample_positions is not None else None
+        yield {
+            prefix: [sp["name"] for sp in sps]
+            for prefix, sps in sample_positions.items()
+        } if sample_positions is not None else None
         if sample_positions is not None:
             release_sample_positions(sample_positions, self.sample_view)
 
     def test_create_sample(self):
-        sample_id = self.sample_view.create_sample("test", position="furnace_table")
+        sample_id = self.sample_view.create_sample("test", position="overflow_rack/1")
         sample = self.sample_view.get_sample(sample_id=sample_id)
-        self.assertEqual("furnace_table", sample.position)
+        self.assertEqual("overflow_rack/1", sample.position)
         self.assertEqual("test", sample.name)
 
         # try to create samples with same name
@@ -69,16 +75,16 @@ class TestSampleView(TestCase):
 
         # try to create samples with non-exist positions
         with self.assertRaises(ValueError):
-            self.sample_view.create_sample("test_1", position="non-exist position")
+            self.sample_view.create_sample("test_1", position="non-existent position")
 
         # try to create samples with the same position
         with self.assertRaises(ValueError):
-            self.sample_view.create_sample("test_2", position="furnace_table")
+            self.sample_view.create_sample("test_2", position="overflow_rack/1")
 
     def test_get_sample(self):
         # try to get a non-exist sample
-        sample = self.sample_view.get_sample(sample_id=ObjectId())
-        self.assertIs(None, sample)
+        with self.assertRaises(ValueError):
+            self.sample_view.get_sample(sample_id=ObjectId())
 
     def test_move_sample(self):
         sample_id = self.sample_view.create_sample("test", position=None)
@@ -86,23 +92,31 @@ class TestSampleView(TestCase):
         sample = self.sample_view.get_sample(sample_id=sample_id)
         self.assertEqual(None, sample.position)
 
-        self.sample_view.move_sample(sample_id=sample_id, position="furnace_table")
+        self.sample_view.move_sample(
+            sample_id=sample_id, position="furnace_1/furnace_table"
+        )
         sample = self.sample_view.get_sample(sample_id=sample_id)
-        self.assertEqual("furnace_table", sample.position)
+        self.assertEqual("furnace_1/furnace_table", sample.position)
 
         # try to move a non-exist sample
         with self.assertRaises(ValueError):
-            self.sample_view.move_sample(sample_id=ObjectId(), position="furnace_table")
+            self.sample_view.move_sample(
+                sample_id=ObjectId(), position="furnace_1/furnace_table"
+            )
 
         # try to move a sample to where it is
-        self.sample_view.move_sample(sample_id=sample_id,
-                                     position=self.sample_view.get_sample(sample_id).position)
+        self.sample_view.move_sample(
+            sample_id=sample_id,
+            position=self.sample_view.get_sample(sample_id).position,
+        )
         sample = self.sample_view.get_sample(sample_id=sample_id)
-        self.assertEqual("furnace_table", sample.position)
+        self.assertEqual("furnace_1/furnace_table", sample.position)
 
         # try to move a sample to an occupied position
         with self.assertRaises(ValueError):
-            self.sample_view.move_sample(sample_id=sample_id_2, position="furnace_table")
+            self.sample_view.move_sample(
+                sample_id=sample_id_2, position="furnace_1/furnace_table"
+            )
         sample_2 = self.sample_view.get_sample(sample_id=sample_id_2)
         self.assertEqual(None, sample_2.position)
 
@@ -115,149 +129,316 @@ class TestSampleView(TestCase):
         task_id = ObjectId()
 
         self.assertListEqual([], self.sample_view.get_sample_positions_by_task(task_id))
-        self.sample_view.lock_sample_position(task_id=task_id, position="furnace_table")
+        self.sample_view.lock_sample_position(
+            task_id=task_id, position="furnace_1/furnace_table"
+        )
 
         sample_id = self.sample_view.create_sample("test")
 
-        self.assertEqual("LOCKED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
-        self.assertListEqual(["furnace_table"], self.sample_view.get_sample_positions_by_task(task_id))
+        self.assertEqual(
+            "LOCKED",
+            self.sample_view.get_sample_position_status("furnace_1/furnace_table")[
+                0
+            ].name,
+        )
+        self.assertListEqual(
+            ["furnace_1/furnace_table"],
+            self.sample_view.get_sample_positions_by_task(task_id),
+        )
 
-        self.sample_view.release_sample_position("furnace_table")
+        self.sample_view.release_sample_position("furnace_1/furnace_table")
 
-        self.sample_view.move_sample(sample_id=sample_id, position="furnace_table")
+        self.sample_view.move_sample(
+            sample_id=sample_id, position="furnace_1/furnace_table"
+        )
 
         # try to lock a sample position that already has a sample
         with self.assertRaises(ValueError):
-            self.sample_view.lock_sample_position(task_id=task_id, position="furnace_table")
+            self.sample_view.lock_sample_position(
+                task_id=task_id, position="furnace_1/furnace_table"
+            )
 
         # try to lock a sample position with a sample that has the same task id
         self.sample_view.update_sample_task_id(sample_id=sample_id, task_id=task_id)
-        self.sample_view.lock_sample_position(task_id=task_id, position="furnace_table")
+        self.sample_view.lock_sample_position(
+            task_id=task_id, position="furnace_1/furnace_table"
+        )
         sample = self.sample_view.get_sample(sample_id=sample_id)
-        self.assertEqual("furnace_table", sample.position)
-        self.assertEqual("OCCUPIED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
+        self.assertEqual("furnace_1/furnace_table", sample.position)
+        self.assertEqual(
+            "OCCUPIED",
+            self.sample_view.get_sample_position_status("furnace_1/furnace_table")[
+                0
+            ].name,
+        )
 
-        self.sample_view.release_sample_position("furnace_table")
+        self.sample_view.release_sample_position("furnace_1/furnace_table")
 
         self.sample_view.move_sample(sample_id=sample_id, position=None)
 
         # try to lock a sample position twice with same task id
-        self.sample_view.lock_sample_position(task_id, position="furnace_table")
-        self.sample_view.lock_sample_position(task_id, position="furnace_table")
+        self.sample_view.lock_sample_position(
+            task_id, position="furnace_1/furnace_table"
+        )
+        self.sample_view.lock_sample_position(
+            task_id, position="furnace_1/furnace_table"
+        )
 
-        self.assertEqual("LOCKED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
+        self.assertEqual(
+            "LOCKED",
+            self.sample_view.get_sample_position_status("furnace_1/furnace_table")[
+                0
+            ].name,
+        )
 
         # try to lock a sample position with different task id
         task_id_2 = ObjectId()
         with self.assertRaises(ValueError):
-            self.sample_view.lock_sample_position(task_id_2, position="furnace_table")
+            self.sample_view.lock_sample_position(
+                task_id_2, position="furnace_1/furnace_table"
+            )
 
     def test_request_sample_position_single(self):
         task_id = ObjectId()
 
-        with self.request_sample_positions(["furnace_table", "furnace_1/inside"], task_id) \
-                as sample_positions:
+        with self.request_sample_positions(
+            ["overflow_rack", "furnace_1/inside"], task_id
+        ) as sample_positions:
             self.assertFalse(sample_positions is None)
             for sample_position_prefix, sample_position in sample_positions.items():
                 self.assertTrue(sample_position[0].startswith(sample_position_prefix))
-                self.assertEqual("LOCKED", self.sample_view.get_sample_position_status(sample_position[0])[0].name)
-                self.assertEqual(task_id, self.sample_view.get_sample_position_status(sample_position[0])[1])
+                self.assertEqual(
+                    "LOCKED",
+                    self.sample_view.get_sample_position_status(sample_position[0])[
+                        0
+                    ].name,
+                )
+                self.assertEqual(
+                    task_id,
+                    self.sample_view.get_sample_position_status(sample_position[0])[1],
+                )
 
         for sample_position in sample_positions.values():
-            self.assertEqual("EMPTY", self.sample_view.get_sample_position_status(sample_position[0])[0].name)
-            self.assertEqual(None, self.sample_view.get_sample_position_status(sample_position[0])[1])
+            self.assertEqual(
+                "EMPTY",
+                self.sample_view.get_sample_position_status(sample_position[0])[0].name,
+            )
+            self.assertEqual(
+                None, self.sample_view.get_sample_position_status(sample_position[0])[1]
+            )
 
     def test_request_device_timeout(self):
         task_id = ObjectId()
         task_id_2 = ObjectId()
 
-        with self.request_sample_positions(["furnace_table", "furnace_1/inside"], task_id) \
-                as sample_positions:
+        with self.request_sample_positions(
+            ["furnace_1/furnace_table", "furnace_1/inside"], task_id
+        ) as sample_positions:
             self.assertFalse(sample_positions is None)
-            with self.request_sample_positions(["furnace_table", "furnace_1/inside"], task_id_2) \
-                    as _sample_positions:
+            with self.request_sample_positions(
+                ["furnace_1/furnace_table", "furnace_1/inside"], task_id_2
+            ) as _sample_positions:
                 self.assertIs(None, _sample_positions)
 
     def test_request_sample_positions_twice(self):
         task_id = ObjectId()
 
-        self.assertEqual("EMPTY", self.sample_view.get_sample_position_status("furnace_table")[0].name)
-        with self.request_sample_positions(["furnace_table", "furnace_1/inside",
-                                            {"prefix": "furnace_temp", "number": 3}], task_id):
-            self.assertEqual("LOCKED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
-            self.assertEqual("LOCKED", self.sample_view.get_sample_position_status("furnace_temp/0")[0].name)
-            with self.request_sample_positions(["furnace_table", "furnace_temp/0"], task_id) \
-                    as sample_positions_:
-                self.assertDictEqual({"furnace_table": ["furnace_table"], "furnace_temp/0": ["furnace_temp/0"]},
-                                     sample_positions_)
-                self.assertEqual("LOCKED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
-                with self.request_sample_positions(["furnace_table"], task_id) as sample_positions__:
-                    self.assertDictEqual({"furnace_table": ["furnace_table"]}, sample_positions__)
-                    self.assertEqual("LOCKED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
+        self.assertEqual(
+            "EMPTY",
+            self.sample_view.get_sample_position_status("furnace_4/furnace_table")[
+                0
+            ].name,
+        )
+        with self.request_sample_positions(
+            [
+                "furnace_4/furnace_table",
+                "furnace_4/inside",
+                {"prefix": "overflow_rack", "number": 3},
+            ],
+            task_id,
+        ):
+            self.assertEqual(
+                "LOCKED",
+                self.sample_view.get_sample_position_status("furnace_4/furnace_table")[
+                    0
+                ].name,
+            )
+            self.assertEqual(
+                "LOCKED",
+                self.sample_view.get_sample_position_status("overflow_rack/0")[0].name,
+            )
+            with self.request_sample_positions(
+                ["furnace_4/furnace_table", "overflow_rack/0"], task_id
+            ) as sample_positions_:
+                self.assertDictEqual(
+                    {
+                        "furnace_4/furnace_table": ["furnace_4/furnace_table"],
+                        "overflow_rack/0": ["overflow_rack/0"],
+                    },
+                    sample_positions_,
+                )
+                self.assertEqual(
+                    "LOCKED",
+                    self.sample_view.get_sample_position_status(
+                        "furnace_4/furnace_table"
+                    )[0].name,
+                )
+                with self.request_sample_positions(
+                    ["furnace_4/furnace_table"], task_id
+                ) as sample_positions__:
+                    self.assertDictEqual(
+                        {"furnace_4/furnace_table": ["furnace_4/furnace_table"]},
+                        sample_positions__,
+                    )
+                    self.assertEqual(
+                        "LOCKED",
+                        self.sample_view.get_sample_position_status(
+                            "furnace_4/furnace_table"
+                        )[0].name,
+                    )
 
-                self.assertEqual("LOCKED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
+                self.assertEqual(
+                    "LOCKED",
+                    self.sample_view.get_sample_position_status(
+                        "furnace_4/furnace_table"
+                    )[0].name,
+                )
 
-            self.assertEqual("LOCKED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
+            self.assertEqual(
+                "LOCKED",
+                self.sample_view.get_sample_position_status("furnace_4/furnace_table")[
+                    0
+                ].name,
+            )
 
-        self.assertEqual("EMPTY", self.sample_view.get_sample_position_status("furnace_table")[0].name)
-        self.assertEqual(None, self.sample_view.get_sample_position_status("furnace_table")[1])
+        self.assertEqual(
+            "EMPTY",
+            self.sample_view.get_sample_position_status("furnace_4/furnace_table")[
+                0
+            ].name,
+        )
+        self.assertEqual(
+            None,
+            self.sample_view.get_sample_position_status("furnace_4/furnace_table")[1],
+        )
 
     def test_request_sample_positions_occupied(self):
         task_id = ObjectId()
         sample_id = self.sample_view.create_sample("test", position=None)
-        self.assertEqual("EMPTY", self.sample_view.get_sample_position_status("furnace_table")[0].name)
-        self.sample_view.move_sample(sample_id, "furnace_table")
-        self.assertEqual("OCCUPIED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
+        self.assertEqual(
+            "EMPTY",
+            self.sample_view.get_sample_position_status("furnace_4/furnace_table")[
+                0
+            ].name,
+        )
+        self.sample_view.move_sample(sample_id, "furnace_4/furnace_table")
+        self.assertEqual(
+            "OCCUPIED",
+            self.sample_view.get_sample_position_status("furnace_4/furnace_table")[
+                0
+            ].name,
+        )
 
         self.sample_view.update_sample_task_id(sample_id, task_id)
 
-        with self.request_sample_positions(["furnace_table", "furnace_1/inside"], task_id):
-            self.assertEqual("OCCUPIED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
-            self.assertEqual(task_id, self.sample_view.get_sample_position_status("furnace_table")[1])
+        with self.request_sample_positions(
+            ["furnace_4/furnace_table", "furnace_4/inside"], task_id
+        ):
+            self.assertEqual(
+                "OCCUPIED",
+                self.sample_view.get_sample_position_status("furnace_4/furnace_table")[
+                    0
+                ].name,
+            )
+            self.assertEqual(
+                task_id,
+                self.sample_view.get_sample_position_status("furnace_4/furnace_table")[
+                    1
+                ],
+            )
 
-        self.assertEqual("OCCUPIED", self.sample_view.get_sample_position_status("furnace_table")[0].name)
-        self.assertEqual(None, self.sample_view.get_sample_position("furnace_table")["task_id"])
+        self.assertEqual(
+            "OCCUPIED",
+            self.sample_view.get_sample_position_status("furnace_4/furnace_table")[
+                0
+            ].name,
+        )
+        self.assertEqual(
+            None,
+            self.sample_view.get_sample_position("furnace_4/furnace_table")["task_id"],
+        )
 
     def test_request_multiple_sample_positions(self):
         task_id = ObjectId()
 
         for j in range(1, 5):
-            with self.request_sample_positions([{"prefix": "furnace_temp", "number": j}], task_id) \
-                    as sample_positions:
+            with self.request_sample_positions(
+                [{"prefix": "overflow_rack", "number": 4}], task_id
+            ) as sample_positions:
                 self.assertFalse(sample_positions is None)
                 for sample_position_prefix, sample_position in sample_positions.items():
                     for i in range(j):
-                        self.assertTrue(sample_position[i].startswith(sample_position_prefix))
+                        self.assertTrue(
+                            sample_position[i].startswith(sample_position_prefix)
+                        )
                         self.assertEqual(
-                            "LOCKED", self.sample_view.get_sample_position_status(sample_position[i])[0].name)
-                        self.assertEqual(task_id,
-                                         self.sample_view.get_sample_position_status(sample_position[i])[1])
+                            "LOCKED",
+                            self.sample_view.get_sample_position_status(
+                                sample_position[i]
+                            )[0].name,
+                        )
+                        self.assertEqual(
+                            task_id,
+                            self.sample_view.get_sample_position_status(
+                                sample_position[i]
+                            )[1],
+                        )
 
             for sample_position in sample_positions.values():
                 for i in range(j):
-                    self.assertEqual("EMPTY", self.sample_view.get_sample_position_status(sample_position[i])[0].name)
-                    self.assertEqual(None, self.sample_view.get_sample_position_status(sample_position[i])[1])
+                    self.assertEqual(
+                        "EMPTY",
+                        self.sample_view.get_sample_position_status(sample_position[i])[
+                            0
+                        ].name,
+                    )
+                    self.assertEqual(
+                        None,
+                        self.sample_view.get_sample_position_status(sample_position[i])[
+                            1
+                        ],
+                    )
 
         # try when requesting sample positions more than we have in the lab
         with self.assertRaises(ValueError):
-            with self.request_sample_positions([{"prefix": "furnace_temp", "number": 5}], task_id):
+            with self.request_sample_positions({None: {"overflow_rack": 100}}, task_id):
                 pass
 
     def test_request_multiple_sample_positions_multiple_tasks(self):
         task_id_1 = ObjectId()
         task_id_2 = ObjectId()
 
-        with self.request_sample_positions([{"prefix": "furnace_temp", "number": 2}], task_id_1) \
-                as sample_positions:
-            self.assertEqual(2, len(sample_positions["furnace_temp"]))
-            self.assertTrue(sample_positions["furnace_temp"][0].startswith("furnace_temp"))
-            self.assertTrue(sample_positions["furnace_temp"][1].startswith("furnace_temp"))
+        with self.request_sample_positions(
+            [{"prefix": "overflow_rack", "number": 2}], task_id_1
+        ) as sample_positions:
+            self.assertEqual(2, len(sample_positions["overflow_rack"]))
+            self.assertTrue(
+                sample_positions["overflow_rack"][0].startswith("overflow_rack")
+            )
+            self.assertTrue(
+                sample_positions["overflow_rack"][1].startswith("overflow_rack")
+            )
             with self.request_sample_positions(
-                    [{"prefix": "furnace_temp", "number": 2}], task_id_2) as sample_positions_:
-                self.assertEqual(2, len(sample_positions_["furnace_temp"]))
-                self.assertTrue(sample_positions_["furnace_temp"][0].startswith("furnace_temp"))
-                self.assertTrue(sample_positions_["furnace_temp"][1].startswith("furnace_temp"))
+                [{"prefix": "overflow_rack", "number": 2}], task_id_2
+            ) as sample_positions_:
+                self.assertEqual(2, len(sample_positions_["overflow_rack"]))
+                self.assertTrue(
+                    sample_positions_["overflow_rack"][0].startswith("overflow_rack")
+                )
+                self.assertTrue(
+                    sample_positions_["overflow_rack"][1].startswith("overflow_rack")
+                )
             with self.request_sample_positions(
-                    [{"prefix": "furnace_temp", "number": 4}], task_id_2
+                [{"prefix": "overflow_rack", "number": 100}], task_id_2
             ) as sample_positions_:
                 self.assertIs(None, sample_positions_)

@@ -263,6 +263,15 @@ class DeviceView:
 
         return DeviceTaskStatus[device_entry["status"]]
 
+    def get_devices_by_task(self, task_id: Optional[ObjectId]) -> List[BaseDevice]:
+        """
+        Get devices given a task id (regardless of its status!)
+        """
+        return [
+            self._device_list[device["name"]]
+            for device in self._device_collection.find({"task_id": task_id})
+        ]
+
     def occupy_device(self, device: Union[BaseDevice, str], task_id: ObjectId):
         """
         Occupy a device with given task id
@@ -274,22 +283,15 @@ class DeviceView:
             task_id=task_id,
         )
 
-    def get_devices_by_task(self, task_id: Optional[ObjectId]) -> List[BaseDevice]:
-        """
-        Get devices given a task id (regardless of its status!)
-        """
-        return [
-            self._device_list[device["name"]]
-            for device in self._device_collection.find({"task_id": task_id})
-        ]
-
-    def release_device(self, device_name: str):
+    def release_device(self, device: Union[BaseDevice, str]):
         """
         Release a device
 
-        device: name of device to be released
+        device: name of device to be released, or instance of BaseDevice
         """
-        device_entry = self.get_device(device_name=device_name)
+        if isinstance(device, BaseDevice):
+            device = device.name
+        device_entry = self.get_device(device_name=device)
 
         update_dict = {
             "task_id": None,
@@ -308,7 +310,7 @@ class DeviceView:
             )
 
         self._device_collection.update_one(
-            {"name": device_name},
+            {"name": device},
             {"$set": update_dict},
         )
 

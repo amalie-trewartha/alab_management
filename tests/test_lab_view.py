@@ -61,16 +61,17 @@ class TestLabView(TestCase):
 
         with lab_view.request_resources(
             {
-                Furnace: ["$/inside"],
-                RobotArm: [],
-                None: [{"prefix": "furnace_table", "number": 1}],
+                Furnace: {"inside": 1, "furnace_table": 1},
+                RobotArm: {},
             }
         ) as (devices, sample_positions):
             self.assertDictEqual(
                 {
-                    Furnace: {"$/inside": ["furnace_1/inside"]},
+                    Furnace: {
+                        "inside": ["furnace_1/inside"],
+                        "furnace_table": ["furnace_1/furnace_table"],
+                    },
                     RobotArm: {},
-                    None: {"furnace_table": ["furnace_table"]},
                 },
                 sample_positions,
             )
@@ -83,7 +84,9 @@ class TestLabView(TestCase):
             )
             self.assertEqual(
                 "LOCKED",
-                self.sample_view.get_sample_position_status("furnace_table")[0].name,
+                self.sample_view.get_sample_position_status("furnace_1/furnace_table")[
+                    0
+                ].name,
             )
         time.sleep(1)
         self.assertEqual("IDLE", self.device_view.get_status("furnace_1").name)
@@ -95,7 +98,9 @@ class TestLabView(TestCase):
         )
         self.assertEqual(
             "EMPTY",
-            self.sample_view.get_sample_position_status("furnace_table")[0].name,
+            self.sample_view.get_sample_position_status("furnace_1/furnace_table")[
+                0
+            ].name,
         )
 
     def test_request_resources_empty(self):

@@ -68,7 +68,7 @@ class TestLaunch(unittest.TestCase):
             self.assertTrue("success", resp_json["status"])
             exp_ids.append(exp_id)
             time.sleep(3)
-        time.sleep(5)
+        time.sleep(10)
         self.assertEqual(9, self.task_view._task_collection.count_documents({}))
         self.assertTrue(
             all(

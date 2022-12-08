@@ -9,29 +9,35 @@ from ..devices.furnace import Furnace
 
 
 class Heating(BaseTask):
-    def __init__(self, sample: ObjectId,
-                 setpoints: List[Tuple[float, float]], *args, **kwargs):
+    def __init__(
+        self, sample: ObjectId, setpoints: List[Tuple[float, float]], *args, **kwargs
+    ):
         super(Heating, self).__init__(*args, **kwargs)
         self.setpoints = setpoints
         self.sample = sample
 
     def run(self):
-        with self.lab_view.request_resources({Furnace: ["$/inside"]}) as (devices, sample_positions):
+        with self.lab_view.request_resources({Furnace: {"inside": 1}}) as (
+            devices,
+            sample_positions,
+        ):
             furnace = devices[Furnace]
-            inside_furnace = sample_positions[Furnace]["$/inside"][0]
+            inside_furnace = sample_positions[Furnace]["inside"][0]
 
-            moving_task = Moving(sample=self.sample,
-                                 task_id=self.task_id,
-                                 dest=inside_furnace,
-                                 lab_view=self.lab_view)
-            moving_task.run()
+            self.run_subtask(
+                Moving,
+                sample=self.sample,
+                dest=inside_furnace,
+            )
 
             furnace.run_program(self.setpoints)
 
             while furnace.is_running():
-                self.logger.log_device_signal({
-                    "device": furnace.name,
-                    "temperature": furnace.get_temperature(),
-                })
+                self.logger.log_device_signal(
+                    {
+                        "device": furnace.name,
+                        "temperature": furnace.get_temperature(),
+                    }
+                )
                 time.sleep(1)
         return self.task_id

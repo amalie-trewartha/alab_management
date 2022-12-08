@@ -1,3 +1,4 @@
-from alab_management import import_task_definitions
-
-import_task_definitions(__file__, __name__)
+from .starting import Starting
+from .heating import Heating
+from .moving import Moving
+from .ending import Ending

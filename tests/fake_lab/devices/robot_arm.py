@@ -10,10 +10,16 @@ class RobotArm(BaseDevice):
     def sample_positions(self):
         return [
             SamplePosition(
-                "{name}/sample_holder".format(name=self.name),
-                description="The position that can hold the sample"
+                "gripper",
+                description="The position that can hold the sample in the robot arm gripper.",
             ),
         ]
+
+    def connect(self):
+        pass
+
+    def disconnect(self):
+        pass
 
     def emergent_stop(self):
         pass
@@ -23,6 +29,3 @@ class RobotArm(BaseDevice):
 
     def is_running(self) -> bool:
         return False
-
-
-robot_arm = RobotArm(name="dummy")

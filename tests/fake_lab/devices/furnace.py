@@ -12,22 +12,23 @@ class Furnace(BaseDevice):
         super(Furnace, self).__init__(*args, **kwargs)
         self._is_running = False
 
+    def connect(self):
+        pass
+
+    def disconnect(self):
+        pass
+
     @property
     def sample_positions(self):
         return [
             SamplePosition(
-                "{name}/inside".format(name=self.name),
-                description="The position inside the furnace, where the samples are heated"
+                "inside",
+                description="The position inside the furnace, where the samples are heated",
             ),
             SamplePosition(
                 "furnace_table",
-                description="Temporary position to transfer samples"
+                description="Temporary position to transfer samples",
             ),
-            SamplePosition(
-                "furnace_temp",
-                number=4,
-                description="Test positions",
-            )
         ]
 
     def emergent_stop(self):
@@ -47,9 +48,3 @@ class Furnace(BaseDevice):
 
     def get_temperature(self):
         return 300
-
-
-furnace_1 = Furnace(name="furnace_1")
-furnace_2 = Furnace(name="furnace_2")
-furnace_3 = Furnace(name="furnace_3")
-furnace_4 = Furnace(name="furnace_4")
